@@ -42,5 +42,5 @@ layer using the syntax extension mechanisms. M-expressions anyone?
 
 The Lisp-side of the implementation is a complete rip-off of Peter
 Norvig's [JScheme](http://norvig.com/jscheme.html). The parser
-technology is based on techniques introduced by Jan Reker in his
+technology is based on techniques introduced by Jan Rekers in his
 [dissertation](http://homepages.cwi.nl/~paulk/dissertations/Rekers.pdf).
