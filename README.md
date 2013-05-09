@@ -38,9 +38,9 @@ Lisps, CherryLisp's built-ins all use alpha-numeric names. The
 hypothesis is that a nice syntax can be built on top of the basic Lisp
 layer using the syntax extension mechanisms. M-expressions anyone?
 
-## Acknowledgments
+## Acknowledgements
 
 The Lisp-side of the implementation is a complete rip-off of Peter
 Norvig's [JScheme](http://norvig.com/jscheme.html). The parser
-technology is based on techniques from Jan Reker's
+technology is based on techniques introduced by Jan Reker in his
 [dissertation](http://homepages.cwi.nl/~paulk/dissertations/Rekers.pdf).
