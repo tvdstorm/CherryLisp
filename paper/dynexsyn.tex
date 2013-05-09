@@ -1,0 +1,649 @@
+\documentclass[a4paper]{llncs}
+\usepackage{alltt,xspace,listings,boxedminipage,url,cite}
+\def\pico{\textsc{Pico}\xspace}
+\def\asfsdf{\textsc{Asf+Sdf}\xspace}
+\def\cherrylisp{\textsc{CherryLisp}\xspace}
+
+\def\mytextbf#1{\textrm{\textbf{#1}}}
+\def\mytextit#1{\textrm{\textit{#1}}}
+\def\Begin{\mytextbf{begin}}
+\def\Declare{\mytextbf{declare}}
+\def\End{\mytextbf{end}}
+\def\Skip{\mytextbf{skip}}
+\def\If{\mytextbf{if}}
+\def\Then{\mytextbf{then}}
+\def\Else{\mytextbf{else}}
+\def\Fi{\mytextbf{fi}}
+\def\While{\mytextbf{while}}
+\def\Do{\mytextbf{do}}
+\def\Od{\mytextbf{od}}
+
+\def\Var#1{\mytextit{#1}}
+
+
+\def\Class{\mytextbf{class}}
+\def\Case{\mytextbf{case}}
+\def\Def{\mytextbf{def}}
+\def\When{\mytextbf{when}}
+\def\Return{\mytextbf{return}}
+\def\Nil{\mytextbf{nil}}
+
+%\title{Dynamic Language Embedding Through Incremental Parser Generation}
+%\title{Dynamic Syntax Extension Through Incremental Parser Generation}
+%\title{A Monolingual Programming Environment with User-Defined
+%Syntax}
+\title{Towards Dynamically Extensible Syntax}
+\author{Tijs van der Storm}
+\institute{Centrum Wiskunde \&\ Informatica\\
+  Science Park 123\\
+  1098 XG Amsterdam}
+
+\begin{document}
+\maketitle
+
+
+\begin{abstract}
+  Domain specific language embedding requires either a very flexible
+  host language to approximate the desired level of abstraction, -- or
+  elaborate tool support for ``compiling away'' embedded notation. The
+  former confines the language designer to reinterpreting a given
+  syntax. The latter prohibits runtime analysis, interpretation and
+  transformation of the embedded language. I tentatively present
+  \cherrylisp: a Lisp dialect with dynamically user-definable syntax
+  that suffers from neither of these drawbacks.
+\end{abstract}
+
+\begin{quote}
+  \textit{Jan Heering often speaks fondly of Lisp and much of his
+    research has been dedicated to programming environments, syntax,
+    semantics, and domain specific languages. On the occasion of his
+    retirement I would like to honour him and his work with this
+    extended abstract which touches upon some of these subjects.}
+\end{quote}
+
+\section{Introduction}
+\label{SECT:introduction}
+
+\hfill\begin{minipage}[t]{0.66\linewidth}
+\begin{flushright}\small
+  \textit{The project of defining M-expressions precisely and
+    compiling them or at least translating them into S-expressions was
+    neither finalized nor explicitly abandoned. It just receded into
+    the indefinite future, ...}\\[0pt]
+  \rule{1cm}{0pt} \hfill John McCarthy~\cite{HistoryOfLISP}.
+\end{flushright}
+\end{minipage}\bigskip
+
+\noindent Domain specific languages (DSLs) are a powerful tool to
+increase the level of abstraction in
+programming~\cite{WhenAndHowDSL}. Using a notation closer to the
+problem domain increases productivity, improves communication with
+stakeholders, reduces code size and allows for domain specific
+analysis and optimization. Nevertheless, developing a DSL requires a
+considerable investment up-front. 
+
+A more approach to DSL engineering is embedding domain specific
+notation in a (general purpose) host language. There are basically two
+approaches: ``bending'' the syntax of the host language to reach the
+desired level of abstraction, or compile-time preprocessing to
+assimilate the domain specific notation into the host language by
+transformation.  A drawback of the former is that a DSL designer is
+confined to the syntactic (and semantic) freedom provided by the host
+language. The latter suffers from the fact that domain specific
+notation is ``compiled away'': the embedded notation is inaccessible
+at runtime, which prohibits dynamic interpretation, analysis,
+debugging, pretty printing, optimization and disambiguation of
+embedded DSLs. So we find ourselves in a quandary: restricted syntax
+with runtime access, or rich syntax without.
+
+Can we combine the best of both embedding worlds? This extended
+abstract presents some evidence that the answer is affirmative. I
+present the prototype implementation of a monolingual programming
+environment~\cite{Monolingual,Eentalig}, called \cherrylisp, which
+features arbitrary dynamically user-defined syntax. Embedded syntax is
+accessible at runtime, so that language related tooling --
+interpreters, typecheckers, debuggers, formatters, optimizers
+etc.~\cite{ToolOriented} -- can be developed from within. Key features
+of \cherrylisp include:
+\begin{enumerate}
+\item \textbf{Dynamic syntax extension} the syntax of \cherrylisp can
+  be extended at runtime. The abstract syntax trees (ASTs) that are
+  the result of parsing embedded syntax are available at runtime for
+  analysis, assimilation, translation, interpretation etc.
+\item \textbf{Immediate extension} syntax extensions can be immediately used
+  in the same file that contains the very expressions to extend the
+  language. \cherrylisp's grammar can be modified on the fly during a
+  single parse.
+\item \textbf{Arbitrary context-free grammars} \cherrylisp's parser is
+  based on generalized parsing techniques to allow the use of
+  arbitrary context-free grammars for embedded notation. Because of 1,
+  should ambiguity arise, it can be dealt with from within \cherrylisp.
+\end{enumerate}
+
+
+\subsubsection*{Related work}
+There is ample related work on syntax extension. Almost all related
+work employs some form of static assimilation of embedded
+notation. Below I briefly discuss some relevant references.
+
+The Lithe language features completely user defined
+syntax~\cite{Lithe}. Inspired by Smalltalk-72 it combines a
+object-oriented class model with syntax directed translation (SDT) to
+attach actions to grammar rules (``methods''). A (parsed) string thus
+leads to a sequence of rule applications.  It is unclear which grammar
+class is allowed, but ambiguities are explicitly disallowed. ASTs are
+not first-class and non-existent at runtime.
+
+Cardelli et al.\cite{ExtensibleSyntax} presented incremental syntax
+extensions which respect the scoping rules and type system of the host
+language. The syntax extensions are compiled away to the host
+language. Their implementation is based on an LL(1) parser so there
+are restrictions as to what kind of extensions are possible. An
+approach that does not suffer from such restrictions is described
+in~\cite{ConcreteSyntaxForObjects}. This work is based on the syntax
+definition formalism \textsc{Sdf} ~\cite{SDFManual,EelcoVisserThesis}
+which allows arbitrary context-free grammars. Embedded languages are
+assimilated into the host language in a compile-time preprocessing
+phase. Since \textsc{Sdf} supports arbitrary context-free grammars,
+there is a risk of ambiguity; ambiguities must be resolved before
+assimilation.
+
+The MS$^2$ programmable syntax macro
+system~\cite{ProgrammableSyntaxMacros} provides the macro writer with
+full C to define their semantics. Macro expansion has to be completed
+before running the program: ``none of it exists at
+runtime''. Metamorphic syntax macros are another powerful tool to
+extend a host language syntax~\cite{MetaMorphic}. However, ``a syntax
+macro must ultimately produce host syntax and thus cannot return user
+defined ASTs'' hence the ASTs are not available at runtime.  Finally,
+OMeta~\cite{OMeta} is fully dynamic language extension tool, allowing
+lexically scoped syntax extensions. It is based on Packrat
+parsing. This has the advantage that no ambiguities are possible, but
+this also means it does not support arbitrary context-free
+grammars. For instance, no left-recursive rules can be used (see
+however, \cite{PackratLeftRec}). Additionally, there is no access to
+parse-trees, since it is recognition based (in essence similar to
+Lithe and inspired by Meta II\cite{MetaII}).
+
+In fact Common Lisp's~\cite{CommonLispTL2} reader macros provide
+almost the functionality we are looking for: by hooking into the
+reader programmers can seize the opportunity of parsing any embedded
+syntax (see~\cite{XExpressions} for an example). \cherrylisp differs
+from reader macros in that it uses context-free grammars to define
+syntax and a dedicated parsing algorithm producing uniform ASTs. In
+other words \cherrylisp provides \textit{declarative} reader
+macros. The result can be interpreted, translated, analyzed etc. using
+powerful macro facilities just like in Common Lisp~ \cite{MacrosVSBlocks}. 
+
+%As an example of
+%an analysis that would be very hard to implement using static syntax
+%macros, \cite{MacrosVSBlocks} describes a macro in Common Lisp that
+%finds the roots of a Lisp function. It would be very hard to encode
+%such an analysis in the reduction semantics of a syntax macro.
+
+\section{Dynamic Syntax Extension in CherryLisp}
+\label{SECT:cherrylisp}
+
+%\subsection{Introduction}
+
+\cherrylisp is a Scheme dialect featuring runtime, grammar-based
+syntax extension. Below I illustrate a single special form used for
+syntax extension.  Cursory knowledge of Lisp is assumed.
+
+%\subsection{Dynamic Syntax Extension}
+
+To allow arbitrary user-defined syntax, \cherrylisp features the
+following special form:
+\begin{quote}
+\texttt{(extend-syntax $[$($l$ $s$ ($x_1 ... x_n$))$]^{*}$)} 
+\end{quote}
+This special form is used for dynamically extending the current
+grammar with context-free productions $s$ ::= $x_1 ... x_n$. The
+syntax extension will be immediately available. Resulting AST nodes
+will be labeled $l$.  To illustrate how this special form works, let's
+extend the syntax with the notation for absolute values $|x|$ by
+entering the following \texttt{extend-syntax} invocation in the
+read-eval-print-loop (REPL\footnote{The \texttt{>} indicates the
+  prompt, the last line is the evaluation result.}):
+\begin{quote}
+\begin{verbatim}
+> (extend-syntax (abs Form ("|" Form "|")))
+()
+\end{verbatim}
+\end{quote}
+Since $|x|$ should be a normal expression, we extend the non-terminal
+for \cherrylisp expressions (\textit{Form}). After evaluation,
+the notation is immediately available:
+\begin{quote}
+\begin{verbatim}
+> |1|
+Unbound variable: abs
+\end{verbatim}
+\end{quote}
+A snippet of syntax like this will be converted to internal
+S-expressions by the parser. After parsing, the REPL attempts to
+evaluate this expression. Since the AST label for absolute value notation is
+``abs'' the evaluator attempts to call this function which results in
+an unbound variable error. To see what the parser returns, we have to
+quote the snippet:
+\begin{quote}
+\begin{verbatim}
+> '|x|
+(abs 1)
+\end{verbatim}
+\end{quote}
+To give semantics to this construct, ordinary functions or macros can
+be used:
+\begin{quote}
+\begin{verbatim}
+> (define (abs x) (if (>= x 0) x (- 0 x)))
+abs
+> |1|
+1
+> |-1|
+1
+\end{verbatim}
+\end{quote}
+In this a case a simple function suffices, but the real power lies in
+arbitrary combinations of functions and macros. For instance, to give
+a more involved example, let's try and self-apply syntax extension by
+adding syntax for context-free productions so that grammars can be
+written in more natural form:
+\begin{quote}
+\begin{verbatim}
+> (extend-syntax
+    (sort Element (Symbol))
+    (lit  Element (String))
+    (star Element (Symbol "*"))
+    (plus Element (Symbol "+"))
+    (prod Form (Symbol ":" Symbol "::=" (star Element) ";")))
+()
+\end{verbatim}
+\end{quote}
+Note the use of ordinary S-expressions for complex grammar symbols in
+last production (\texttt{(star Element)}).  Evaluating this form at
+the command-line will add context-free productions defining the syntax
+of context-free productions itself to the current grammar of
+\cherrylisp. We now can write productions as follows:
+\begin{quote}
+\begin{verbatim}
+> 'abs:Form ::= "|" Form "|";
+(prod "abs" "Form" ((sort "Form")))
+\end{verbatim}
+\end{quote}
+This new syntax makes it a lot more easy to define extension grammars.
+It is not readily possible to give semantics to these productions
+using just functions because of eager argument evaluation. For
+example, we could use a macro to interpret \texttt{prod} AST forms, as
+follows:
+\begin{quote}
+%> (define (sort str) (str2sym str))
+%sort
+\begin{verbatim}
+> (define prod (macro (label sym elts)  
+    `'(,(str2sym label) ,(str2sym sym) ,elts)))
+prod
+> abs:Form ::= "|" Form "|";
+(abs Form ((sort "Form")))
+\end{verbatim}
+\end{quote}
+Macros in \cherrylisp are similar to ordinary \texttt{lambda}s but
+with unevaluated arguments. The quasi-quotation (\texttt{`}) returns
+its argument unevaluated except where anti-quotes (\texttt{,}) are
+encountered~\cite{QuasiQuotation}. So this macro returns a list with
+the label and symbol strings converted to symbols. Note how the result
+of entering a syntax production is evaluated on the fly via the
+\texttt{prod} macro, returning an S-expression conforming to the rule
+format accepted by \texttt{extend-syntax} (with exception of the , as
+of yet, unevaluated \texttt{(sort "Form")} construct). In the
+following I will assume there is a macro \texttt{syntax} that
+completely interprets production ASTs and converts them
+\texttt{extend-syntax} invocations. So the following expression
+\texttt{(syntax tuple:Form ::= "|" Form "|";)} will effectively add
+absolute value notation to the language.
+
+\section{Embedding a Programming Language: Pico}
+\label{SECT:pico}
+
+\subsection{Syntax}
+
+\pico~\cite{PicoReport} is a small, \textsc{While}-like language,
+featuring assignment, if-then-else, while-do and skip
+statements. Supported expressions are literals (strings, naturals),
+variables, addition, subtraction and string concatenation. Using the
+\texttt{syntax} macro from Section~\ref{SECT:cherrylisp} the syntax of
+\cherrylisp is extended with the syntax of \pico (an excerpt of which
+is listed in Figure~\ref{FIG:pico-syntax}).
+
+\begin{figure}
+\begin{center}
+\begin{boxedminipage}[t]{0.9\linewidth}
+\small
+\begin{verbatim}
+program:Program ::= "begin" Declare  Series "end";
+declare:Declare ::= "declare" Decls ";";
+decl:Decls      ::= Decl;
+decls:Decls     ::= Decl ";" Decls;
+idtype:Decl     ::= Symbol ":" Type;
+assign:Stat     ::= Symbol ":=" Exp;
+skip:Stat       ::= "skip";
+if:Stat         ::= "if" Exp "then" Series "else" Series "fi";
+while:Stat      ::= "while" Exp "do" Series "od";
+add:Exp         ::= Exp "+" Term;
+sub:Exp         ::= Exp "-" Term;
+term:Exp        ::= Term;
+cat:Term        ::= Term "||" Factor;
+fact:Term       ::= Factor;
+bracket:Factor  ::= "(" Exp ")";
+\end{verbatim}
+\end{boxedminipage}
+\end{center}
+\caption{Excerpt of a (context-free) grammar for \pico\label{FIG:pico-syntax}}
+\end{figure}
+
+To be able to embed \pico programs in \cherrylisp programs, we have to
+inject \pico sorts into the primary sort of \cherrylisp. This is where
+the \texttt{form} macro comes in. For instance, evaluating
+\texttt{(form Stat)} adds the production \textit{Form} ::= ``$[$''
+\textit{Stat} ``]'' to the syntax. Recall that \textit{Form} is the
+non-terminal capturing \cherrylisp expressions. This means that \pico
+statements enclosed in square brackets are valid \cherrylisp
+expressions:
+\begin{quote}
+\begin{alltt}
+> '[x := 3]
+(form (stat (assign "x" (term (factor (int "3"))))))
+\end{alltt}
+\end{quote}
+The use of the \texttt{form} macro only allows ground \pico terms to
+be embedded in \cherrylisp, however, to allow for patterns with holes,
+another syntax extension is required. One could, for instance, define
+a macro \texttt{(var \textrm{\textit{str}} $S$)} for declaring pattern
+variables, which, when evaluated, extends the grammar with the
+following productions\footnote{The latter two are actually lexical
+  rules that do not contribute to the AST; for the sake of exposition,
+  however, I choose to gloss over this detail.}:
+\begin{quote}
+\begin{alltt}
+var:\(S\)     ::= \(S\)-Var;
+var:\(S\)-Var ::= ":" \mytextit{str};
+var:\(S\)-Var ::= ":" \mytextit{str} Number;
+\end{alltt}
+\end{quote}
+These productions allow \pico syntax patterns to contain
+variables. For example, after having evaluated \texttt{(var "exp"
+  Exp)}, we can evaluate:
+\begin{quote}
+\begin{alltt}
+> '[x := \Var{:exp}]
+(form (stat (assign "x" (var ":exp"))))
+\end{alltt}
+\end{quote}
+Of course, such pattern variables are of little use if these patterns
+cannot be used to match \pico source code. Since embedded syntax is
+converted to ASTs by the parser, matching can be programmed in plain
+\cherrylisp. Such a match function is illustrated as follows:
+\begin{quote}
+\begin{alltt}
+> (match '[x := x + 1] '[x := \Var{:exp}])
+((":exp" add (term (factor (id "x"))) (factor (int "1"))))
+\end{alltt}
+\end{quote}
+The \texttt{match} function traverses the structure of both its
+arguments, and compares each pair of subtrees it visits. If a variable
+is encountered in the pattern, the corresponding subtree of the first
+argument is bound to it in an environment structure.  The result of
+matching a term against a pattern is the set of bindings created
+during matching, in this case the binding ``\textit{:exp}'' to the AST
+for ``$x + 1$''. Note that since patterns and pattern variables are
+defined using ordinary macros, nothing keeps the user from using
+different, embedded-language specific quotes (i.e. other than
+``[...]''  and ``:'').
+
+\subsection{Semantics}
+
+Using patterns to embed \pico source code and pattern variables in
+matching \pico terms against such patterns allows us to define an
+interpreter for \pico in a style similar to the style employed
+in~\cite{BHK89,PicoReport}. A function to evaluate \pico statements
+is shown below:
+\begin{quote}
+\begin{alltt}
+(define (ev-stat stat env)
+  (switch stat
+    ([\Skip] env)
+    ([\Var{:sym} := \Var{:exp}] (bind sym (ev-exp exp env) env))
+    ([\If \Var{:exp} \Then \Var{:series1} \Else \Var{:series2} \Fi]
+     (if (ev-exp exp env) 
+        (ev-series series1 env)
+        (ev-series series2 env)))
+    ([\While \Var{:exp} \Do \Var{:series} \Od]
+     (if (ev-exp exp env) 
+       (ev-stat stat (ev-series series env))
+       env)))) 
+\end{alltt}
+\end{quote}
+The function \texttt{ev-stat} evaluates a statement; it assumes two
+auxiliary functions: \texttt{ev-series} for evaluating sequences of
+statements and \texttt{ev-exp} for evaluating expressions. The
+top-level expression of the function is a \texttt{switch} construct.
+This macro attempts to match sequences of patterns to its first
+argument. If a match is found, the captured variables are made into
+normal \cherrylisp bindings so that code right of the pattern can
+refer to them. For instance, the pattern for assignment contains a
+variable \Var{:sym} which matches a \pico variable. In the right-hand
+side of this case the captured variable is available as \texttt{sym}.
+
+
+\section{Implementation: GLR \&\  IPG}
+
+The current version of \cherrylisp is implemented in
+Ruby\footnote{http://www.ruby-lang.org}. There are three important
+parts: the parser, de parser generator (the ``grammar'') and the
+interpreter.  The parser algorithm is the Generalized LR (GLR)
+algorithm as described in~\cite{RekersThesis}. The LR(0) parsetable
+generation algorithm is both incremental and lazy
+(IPG)~\cite{RekersThesis, IncrementalParserGeneration}. I have
+instantiated both the parsing and parser generation algorithms in
+scannerless style; this obviates the need for a separate lexical
+analysis phase\footnote{... but might require some provision to
+  enforce longest match for certain lexical sorts, such as
+  identifiers; again, I choose to gloss over this technical detail.}.
+
+The basic configuration of the \cherrylisp interpreter proceeds as
+follows:
+\begin{quote}
+\begin{alltt}
+\Var{g} = IPGGrammar.new("boot.grammar")
+\Var{p} = GLRParser.new(\Var{g})
+\Var{e} = Evaluator.new(\Var{g})
+\Var{p}.add_reduction_observer(\Var{e})
+\end{alltt}
+\end{quote}
+First the IPG parser generator is initialized with the initial grammar
+containing the syntax of the host language, -- in this case a small
+syntax for S-expressions suffices. Then both the parser and evaluator
+are initialized with the parser generator. The GLR algorithm will use
+$g$ to parse text and produce AST. The interpreter has to know about
+the same $g$ in order to add productions to it. Finally, following the
+Observer design pattern, the interpreter is added as an observer of
+the GLR algorithm. In this case it means that the interpreter will be
+notified of reductions performed by the GLR algorithm.
+
+Figure~\ref{FIG:eval} illustrates some of the internals of the
+interpreter. Evaluators are initialized (through \texttt{initialize})
+with a grammar and a fresh environment\footnote{In Ruby, instance
+  variables start with an ``@''.}. The next method,
+\texttt{notify\_reduction} is called during runs of the GLR parsing
+algorithm. The argument is the AST created in a reduce action. If this
+AST is of the \texttt{extend-syntax} kind, the grammar is immediately
+modified. 
+
+\begin{figure}
+\small
+\begin{quote}
+\begin{minipage}[t]{0.55\linewidth}
+\begin{alltt}
+\Def initialize(\Var{grammar})
+  \Var{@grammar} = \Var{grammar}
+  \Var{@env} = Environment.new
+\End
+
+\Def notify_reduction(\Var{form})
+  \If \Var{node}.first == "extend-syntax"
+    \Var{@grammar}.extend(\Var{node}.rest)
+  \End
+\End
+\end{alltt}
+\end{minipage}
+\begin{minipage}[t]{0.5\linewidth}
+\begin{alltt}
+\Def eval(\Var{form}, \Var{env})
+  ...
+  \Case \Var{form}.first
+   \When "extend-syntax" 
+     \Return \Nil
+    ...
+  \End
+\End
+\end{alltt}
+\end{minipage}
+\end{quote}
+\caption{Simplified method skeleton of the \cherrylisp
+  interpreter.\label{FIG:eval}}
+\end{figure}
+Finally, the main content of the interpreter is in the \texttt{eval}
+method. It consists of a large \textbf{case} statement that dispatches
+on the incoming expression (\textit{form}). For the sake of brevity,
+only the cases relevant to syntax extension are shown. If the
+interpeter encounters an \texttt{extend-syntax} form it just returns
+\textbf{nil}, since the arguments to it have already been evaluated
+\textit{during} parsing (in \texttt{notify\_reduction}), and from the
+fact that \textit{form} is a parameter to \texttt{eval} it naturally
+follows that parsing (with respect to \textit{form}) has already
+finished. 
+
+\section{Future Work}
+
+\paragraph{Understanding} First of all, further research should
+concentrate at deeper understanding of the consequences of modifying
+LR parsetables \textit{during} parsing. The experiments with the
+current prototype of \cherrylisp are encouraging (however naive the
+implementation may be). Nevertheless, it is unclear whether there are
+circumstances where the current scheme would not work. For instance,
+currently, there is control over what would happen if, in the case of
+ambiguity, the parsetable is modified ``concurrently'' in different,
+possibly interacting, ways (!). Similarly, there is no rollback for
+undoing parsetable modifications in the case that a certain path
+exercised by the GLR algorithm does \textit{not} eventually lead to a
+valid parse. In other words, currently, parsetable modifications do
+not obey the stack discipline of the GLR algorithm and ignore the its
+quasi concurrency. A purely function implementation of GLR using a
+persistent datastructure for the parsetable could be a viable approach
+to solve these problems.
+
+\paragraph{Bootstrapping} Lisps have a very simple syntax: \cherrylisp
+therefore begs to be bootstrapped. In fact, I think that the following
+five (context-free) productions are should be enough to bootstrap
+\cherrylisp to having a full-fledged Lisp syntax:
+\begin{quote}\small
+\begin{minipage}[t]{0.6\linewidth}
+\begin{alltt}
+nil:Form    ::= "(" ")"
+pair:Form   ::= "( Prefix "." Form ")"
+form:Prefix ::= Form
+\end{alltt}
+\end{minipage}
+\begin{minipage}[t]{0.4\linewidth}
+\begin{alltt}
+num:Form ::= Number
+sym:Form ::= Symbol
+\end{alltt}
+\end{minipage}
+\end{quote}
+These rules suffice for Lisp expressions consisting of dotted pairs
+(e.g. \texttt{(1 . 2)}), number literals and symbols. Using the syntax
+extension mechanism of \cherrylisp any other syntax can be added: list
+syntax, string literals, quotation syntax, etc.
+
+\paragraph{Syntax restrictions} Currently, \cherrylisp only allows the
+current syntax to be extended, but not restricted. It can be useful
+however, to sometimes undo a syntax extension: this will also help
+to minimize possible ambiguities arising from the interaction among
+embedded languages and the host language. The incremental parser
+generation algorithm IPG already caters for the removal of productions
+from a grammar.
+
+
+\paragraph{Lexically scoped syntax extensions} This area of future
+work is closely related to the previous point. Similar to the approach
+of~\cite{ExtensibleSyntax} one would like to restrict the grammar for
+a certain region of source code without having to introduce extra
+non-terminals. Lexically scoped syntax extensions can be implemented
+by performing extension and restriction using a stack
+discipline. However, there are techniques to (temporarily) restrict a
+grammar without adding and/or removing
+productions~(\cite{RekersThesis}, Chapter 3).
+
+I have performed some experiments based on adding and subsequently
+removing productions from a grammar the results of which are somewhat
+encouraging. Scoped grammar modification would cater for idioms like:
+\begin{quote}
+\begin{alltt}
+(with-syntax (abs:Form ::= "|" Form "|";) |x - y|)
+\end{alltt}
+\end{quote}
+This would effectively set up a kind of \textit{syntax jail}: the
+absolute value notation is only available within the confines of the
+\texttt{with-syntax} construct. Additionally, one could imagine syntax
+jails where a completely different grammar is active and not just a
+certain \textit{extended} grammar (as in the example). Further
+research is required however to understand the possible effects of
+destructively (i.e. non-conservatively) modifying the parse table
+during parsing.
+
+\paragraph{First class grammars} To make the previous construct even
+more powerful the current grammar (or really any kind of grammar)
+should be a first-class value in the runtime system. Grammars could
+then be assigned to variables just like any other value. In
+combination with lexically scoped syntax regions, this would allow
+idoms like: \texttt{(with-syntax abs-syntax |-1|)}, where the
+variable \texttt{abs-syntax} holds the productions defining the
+absolute value notation.
+
+Additionally, first class grammars would enable grammars to be
+processed within \cherrylisp itself. In combination with Lisp's
+powerful macro facilities, one could generate default source code
+formatters~\cite{PrettyPrintingSoftwareReengineering} and AST
+manipulation programming interfaces~\cite{APIGen}.
+
+\paragraph{First class parse trees} The current focus of \cherrylisp
+is syntax extension for DSL embedding. In this case, abstract syntax
+is often sufficient for analysis, interpretation and transformation
+purposes. However, for reverse- and reengineering purposes concrete
+syntax trees are needed. Such trees could readily be made available in
+\cherrylisp since the GLR parsing algorithm, in fact, already produces
+them\footnote{To be completely correct, it produces shared packed
+  parse forests; see \cite{RekersThesis}.}. Concrete syntax trees
+preserve information on layout, literals, and comments, -- essential
+information, for instance, when implementing automatic refactorings or
+source level debugging facilities.
+
+
+\section{Conclusion}
+
+I have described a simple, yet very powerful approach to dynamic,
+incremental and immediate syntax extension. Embedded syntax is
+transformed by the parser into S-expressions which are readily
+available for analysis, evaluation, expansion or any kind of
+processing one could conceive of in a Lisp-like language. The current
+prototype is admittedly naive, and further work should focus on deeper
+understanding of the dynamics of syntax extension.
+
+{
+\bibliographystyle{abbrv}
+\bibliography{dynexsyn}
+}
+
+
+\end{document}

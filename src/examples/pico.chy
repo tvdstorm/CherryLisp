@@ -1,0 +1,168 @@
+(eval-when-read
+  (begin
+    (rule cf sort Element (Symbol))
+    (rule cf lit Element (String))
+    (rule cf star Element (Symbol "*"))
+    (rule cf plus Element (Symbol "+"))
+    (rule cf prod Form (Symbol ":" Symbol "::=" (star Element) ";"))))
+(eval-when-read
+ (begin
+   (rule cf program Program ("begin" Declare Series "end"))
+   (rule cf declare Declare ("declare" Decls ";"))
+   (rule cf decl Decls (Decl))
+   (rule cf decls Decls (Decl ";" Decls))
+   (rule cf idtype Decl (Symbol ":" Type))
+   (rule cf assign Stat (Symbol ":=" Exp))
+   (rule cf skip Stat ("skip"))
+   (rule cf if Stat ("if" Exp "then" Series "else" Series "fi"))
+   (rule cf while Stat ("while" Exp "do" Series "od"))
+   (rule cf stat Series (Stat))
+   (rule cf stats Series (Stat ";" Series))
+   (rule cf id Factor (Symbol))
+   (rule cf int Factor (Number))
+   (rule cf str Factor (String))
+   (rule cf add Exp (Exp "+" Term))
+   (rule cf sub Exp (Exp "-" Term))
+   (rule cf term Exp (Term))
+   (rule cf cat Term (Term "||" Factor))
+   (rule cf factor Term (Factor))
+   (rule cf bracket Factor ("(" Exp ")"))
+   (rule cf nat Type ("natural"))
+   (rule cf str Type ("string"))
+
+   (var "stat" Stat)
+   (var "decls" Decls)
+   (var "decl" Decl)
+   (var "series" Series)
+   (var "exp" Exp)
+   (var "fct" Factor)
+   (var "num" Number)
+   (var "str" String)
+   (var "trm" Term)
+   (var "exp" Exp)
+   (var "sym" Symbol)
+   (var "type" Type)
+   (pattern Program)
+   (pattern Exp)
+   (pattern Series)
+   (pattern Decls)))
+
+(define small '[
+begin
+  declare
+    x: natural;
+    s: string;
+  x := 10;
+  while x do
+    x := x - 1;
+    s := s || "#"
+  od
+end])
+
+(define pico '[
+begin
+  declare
+    input: natural;
+    output: natural;
+    repnr: natural;
+    rep: natural;
+  input := 10;
+  output := 1;
+  while input - 1 do
+    rep := output;
+    repnr := input;
+    while repnr - 1 do
+      output := output + rep;
+      repnr := repnr - 1
+    od;
+    input := input - 1
+  od
+end]
+)
+
+(define (test)
+  (match pico '[begin
+  declare
+    :decls0 ;
+  :series0
+end] '()))
+
+
+(define test-nl
+  (match '[x := x] '[:sym1 := :sym1] '()))
+	
+
+(define (init-var var type env)
+  (cond
+   ((equalp type 'natural) (bind var 0 env))
+   ((equalp type 'string) (bind var "" env))))
+
+
+(define match-case
+  (macro (term pattern . body)
+    `(matcher ,(match term pattern '()) ,@body)))
+
+(define matching
+  (macro (term . cases)
+    `(map (lambda (acase) ,(make-case term acase)) ,cases)))
+
+(define make-case
+  (macro (term case)
+    `(matcher (match term ,(first case) ,@(rest case)))))
+  
+
+(define matcher 
+  (macro (bindings . body)
+    `((lambda ,(vars bindings) ,@body) ,@(vals bindings))))
+
+(define (ev-program program)
+  (matching program
+   ([ begin
+       declare
+         :decls ;
+       :series
+      end ]
+   (ev-series series (ev-decls decls)))))
+
+(define (ev-decls decls)
+  (matching decls
+   ([ :decl ; 
+      :decls ] (append (ev-decls decl) (ev-decls decls)))
+   ([ :sym : :type ] (init-var id type (empty-env)))))
+
+(define (ev-series series env)
+   (matching series
+    ([ :stat ;
+       :series ]
+     (ev-series series1 (ev-stat stat1 env)))
+    ([ :stat ] (ev-stat stat env))))
+
+(define (ev-stat stat env)
+  (matching stat
+    ([skip] env)
+    ([ :sym := :exp ]
+     (bind sym (ev-exp exp env) env))
+    ([ if :exp then :series1 else :series2 fi ]
+     (if (ev-exp exp env) 
+	 (ev-series series1 env)
+	 (ev-series series2 env)))
+    ([ while :exp do :series od ]
+     (if (ev-exp exp env) 
+	 (ev-stat stat (ev-series series env))
+	 env))))
+	 
+(define (ev-exp exp env)
+  (matching exp
+    ([ :exp + :trm ] (plus (ev-exp exp env) (ev-exp term env)))
+    ([ :exp - :trm ] (min (ev-exp exp env) (ev-exp term env)))
+    ([ :trm || :fct ] (strcat (ev-exp exp env) (ev-exp term env)))
+    ([ ( :exp ) ] (ev-exp exp env))
+    ([ :fct ] (ev-fact fact env))))
+
+(define (ev-fact fact env)
+  (matching fact
+    ([ :str ] (strip-quotes str))
+    ([ :num ] (str-to-int num))
+    ([ :sym ] (lookup (str-to-sym sym) env))))
+    
+    

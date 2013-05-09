@@ -1,0 +1,47 @@
+
+
+\begin{alltt}
+(define (ev-program program)
+  (switch program
+   ([\Begin \Declare \Var{:decls}; \Var{:series} \End]
+    (ev-series series (ev-decls decls)))))
+
+(define (ev-decls decls)
+  (switch decls
+   ([\Var{:decl} ; \Var{:decls}] (append (ev-decls decl) (ev-decls decls)))
+   ([\Var{:sym} : \Var{:type}] (init-var id type (empty-env)))))
+
+(define (ev-series series env)
+   (switch series
+    ([\Var{:stat1} ; \Var{:series1}] (ev-series series1 (ev-stat stat1 env)))
+    ([\Var{:stat}] (ev-stat stat env))))
+
+(define (ev-stat stat env)
+  (switch stat
+    ([\Skip] env)
+    ([\Var{:sym} := \Var{:exp}] (bind sym (ev-exp exp env) env))
+    ([\If \Var{:exp} \Then \Var{:series1} \Else \Var{:series2} \Fi]
+     (if (ev-exp exp env) 
+        (ev-series series1 env)
+        (ev-series series2 env)))
+    ([\While \Var{:exp} \Do \Var{:series} \Od]
+     (if (ev-exp exp env) 
+       (ev-stat stat (ev-series series env))
+       env)))) 
+
+
+(define (ev-exp exp env)
+  (switch exp
+    ([\Var{:exp} + \Var{:trm}] (plus (ev-exp exp env) (ev-exp term env)))
+    ([\Var{:exp} - \Var{:trm}] (min (ev-exp exp env) (ev-exp term env)))
+    ([\Var{:trm} || \Var{:fct}] (string-cat (ev-exp exp env) (ev-exp term env)))
+    ([( \Var{:exp} )] (ev-exp exp env))
+    ([\Var{:fact}] (ev-fact fact env))))
+
+(define (ev-fact fact env)
+  (switch fact
+    ([\Var{:str}] (strip-quotes str))
+    ([\Var{:num}] (str-to-int num))
+    ([\Var{:sym}] (lookup sym env))))
+    
+\end{alltt}

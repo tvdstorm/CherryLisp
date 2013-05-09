@@ -1,0 +1,64 @@
+(define fact (lambda (x) (if (leq x 1) 1 (times x (fact (min x 1))))))
+
+(define int (lambda (x) (str2int x)))
+
+(define parity (lambda x)
+	(cond
+	  ((gt x 0) 1)
+	  ((lt x 0) (min 0 1))
+	  ((equalp x 0) 0)
+	 ))
+
+(define neg (macro (x) (min 0 x)))
+
+(define or (macro (x y) (if (nullp x) (nullp y) #t)))
+(define and (macro (x y) (if (nullp x) #f (not (nullp y)))))
+
+
+(define qq 
+  (macro (x) 
+    (define (constantp exp)
+      (if (pairp exp) (eqp (car exp) (q q)) (not (symbolp exp))))
+    (define (combine_skeletons left right exp)
+      (cond
+       ((and (constantp left) (constantp right)) 
+	(if (and (eqvp (eval left) (car exp))
+		 (eqvp (eval right) (cdr exp)))
+	    (list (q q) exp)
+	    (list (q q) (cons (eval left) (eval right)))))
+       ((nullp right) (list (q list) left))
+       ((and (pairp right) (eqp (car right) (q list)))
+	(cons (q list) (cons left (cdr right))))
+       (else (list (q cons) left right))))
+    (define (expand_quasiquote exp nesting)
+      (cond
+       ((vectorp exp)
+	(list (q apply) (q vector) (expand_quasiquote (vector2list exp) nesting)))
+       ((not (pairp exp)) 
+	(if (constantp exp) exp (list (q q) exp)))
+       ((and (eqp (car exp) (q uq)) (equalp (length exp) 2))
+	(if (equalp nesting 0)
+	    (second exp)
+	    (combine_skeletons (q (q uq))
+			       (expand_quasiquote (cdr exp) (min nesting 1))
+			       exp)))
+       ((and (eqp (car exp) (q qq)) (equalp (length exp) 2))
+	(combine_skeletons (q (q qq))
+			   (expand_quasiquote (cdr exp) (plus nesting 1))
+			   exp))
+       ((and (pairp (car exp))
+	     (eqp (caar exp) (q uqs))
+	     (equalp (length (car exp)) 2))
+	(if (equalp nesting 0)
+	    (list (q append) (second (first exp))
+		  (expand_quasiquote (cdr exp) nesting))
+	    (combine_skeletons (expand_quasiquote (car exp) (min nesting 1))
+			       (expand_quasiquote (cdr exp) nesting)
+			       exp)))
+       (else (combine_skeletons (expand_quasiquote (car exp) nesting)
+				(expand_quasiquote (cdr exp) nesting)
+				exp))))
+    (expand_quasiquote x 0)))
+
+(define when (macro (x y) (qq (if (uq x) (uq y) (q ())))))
+

@@ -1,0 +1,24 @@
+---
+- test-nl
+- test
+- (test)
+- pico
+- (add 1 2)
+- (min 1 2)
+- (plus 1 2)
+- (load "examples/pico.chy")
+- ev-fact
+- (ev-fact pico '())
+- (load "examples/syntax")
+- (load "examples/syntax.chy")
+- (load "examples/syntax.chy")
+- (load "examples/pico.chy")
+- (extend-syntax (abs Form ("|" Form "|")))
+- ! '|-1|'
+- ! '|1|'
+- ! '''|(min 0 1)|'
+- (define abs (lambda (x) (if (geq x 0) x (min 0 x)))
+- )
+- ! '|1|'
+- ! '''|(min 0 1)|'
+- ! '|(min 0 1)|'

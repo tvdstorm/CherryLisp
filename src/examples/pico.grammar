@@ -1,0 +1,28 @@
+
+program:Program  ::= "begin" Declare  Series "end";
+declare:Declare  ::= "declare" Decls ";";
+decl:Decls       ::= Decl;
+decls:Decls      ::= Decl ";" Decls;
+idtype:Decl      ::= Symbol ":" Type;
+
+nat-type:Type	 ::= "natural";
+str-type:Type	 ::= "string";
+
+assign:Stat      ::= Symbol ":=" Exp;
+skip:Stat        ::= "skip";
+if:Stat		 ::= "if" Exp "then" Series "else" Series "fi";
+while:Stat	 ::= "while" Exp "do" Series "od";
+
+add:Exp		 ::= Exp "+" Term;
+sub:Exp		 ::= Exp "-" Term;
+term:Exp	 ::= Term;
+
+cat:Term	 ::= Term "||" Factor;
+fact:Term	 ::= Factor;
+
+id:Factor	 ::= Symbol;
+num:Factor	 ::= Number;
+str:Factor	 ::= String;
+
+bracket:Factor	 ::= "(" Exp ")";
+

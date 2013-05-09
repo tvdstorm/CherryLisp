@@ -1,0 +1,14 @@
+
+
+(eval_when_read
+ (begin
+   (rule cf star Form (Symbol "*"))
+   (rule cf plus Form (Symbol "+"))))
+
+(eval_when_read
+ (begin
+   (rule cf prod Form (Symbol Symbol "::=" Form *))))
+
+
+
+

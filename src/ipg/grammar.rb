@@ -1,0 +1,156 @@
+require 'stringio'
+require 'set'
+
+require 'ipg/rules'
+require 'ipg/items'
+require 'ipg/state'
+
+class Grammar
+  attr_accessor :rules, :itemsets, :start_symbol, :start_state,
+  :current_selection, :highest_is_id, :spec
+  attr_reader :restrictions
+
+  def initialize(external_start_symbol, 
+                 restrictions = {}, priorities = {},
+                 internal_start_symbol = :START)
+    @restrictions = restrictions
+    @priorities = priorities
+    @current_selection = :all
+    @highest_rule_id = 0
+    @highest_is_id = 0
+    @rules = {}
+    init_start_state(external_start_symbol, internal_start_symbol)
+  end
+
+  def prin
+    return "<grammar:#{object_id}>"
+  end
+
+
+  def init_start_state(external_start_symbol, internal_start_symbol)
+    @start_symbol = internal_start_symbol
+    start_rule = CFRule.new(:start, @start_symbol, [external_start_symbol], true, 0)
+    item = Item.new(start_rule, 0)
+    kernel = [item]
+    @start_state = ItemSet.new(:initial, kernel, 0, 1)
+    @start_state.grammar = self
+
+    # TODO: use weak refs in this set
+    @itemsets = Set.new([@start_state])
+  end
+
+  def follow_restricted?(symbol, token)
+    return restrictions[symbol].include?(token) 
+  end
+
+  def priorities_violated?(rule, treenodes)
+    # treenodes are symbol nodes
+    # if rule > rule'
+    # then rule' may not occur in treenodes
+    return false
+  end
+
+
+  def new_id
+    @highest_is_id += 1
+  end
+
+  def restrict_parser(selection)
+    @current_selection = selection
+    itemsets.each do |is|
+      if is.type == :specialized then
+        is.type = :complete
+      end
+    end
+    each_rule do |rule|
+      rule.select(current_selection)
+    end
+  end
+
+  def each_rule
+    @rules.each_key do |symbol|
+      @rules[symbol].each do |rule|
+        yield rule
+      end
+    end
+  end
+
+  def contains_rule?(rule)
+    if not rules[rule.result] then
+      return false
+    end
+    return rules[rule.result].include?(rule)
+  end
+
+  def add_rules(rules)
+    rules.each do |rule|
+      add_rule(rule)
+    end
+  end
+
+  def del_rules(rules)
+    rules.each do |rule|
+      del_rule(rule)
+    end
+  end
+
+  def add_rule(rule)
+    #puts "Adding rule: #{rule}"
+    rule.id = new_id
+    rules[rule.result] ||= []
+    rules[rule.result] << rule
+    taint_itemsets(rule.result)
+    #rule.select(current_selection)
+    return rule
+  end
+
+  def add_restriction(sort, chars)
+    if !@restrictions.has_key?(sort) then
+      @restrictions[sort] = []
+    end
+    @restrictions[sort] |= chars
+  end
+
+  def taint_itemsets(symbol)
+    itemsets.each do |is|
+      is.taint(symbol)
+    end
+  end
+
+  def del_rule(rule)
+    result = rule.result
+    if rules[result] then
+      rules[result].delete(rule)
+    end
+    taint_itemsets(result)
+  end
+
+  def itemset_with_kernel(k)
+    itemset = itemsets.detect do |is|
+      is.kernel == k
+    end
+    unless itemset then
+      itemset = ItemSet.new(:initial, k, new_id, 1, self)
+      @itemsets.add(itemset)
+    end
+    return itemset
+  end
+
+  def to_s
+    io = StringIO.new
+    rules.each_key do |result|
+      rules[result].each do |rule|
+        io << rule.to_s
+        io << "\n"
+      end
+    end
+    return io.string
+  end
+end
+
+
+
+
+
+
+

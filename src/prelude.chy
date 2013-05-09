@@ -1,0 +1,161 @@
+
+(define var-sort 
+  (lambda (type)
+    (to_symbol (plus (to_string type) "Var"))))
+
+(define var
+  (macro (string type)
+    `(list
+      ,(list 'rule 'cf 'var type `(,(var-sort type)))
+      ,(list 'rule 'lex 'var (var-sort type) (list ":" string 'Number))
+      ,(list 'rule 'lex 'var (var-sort type) (list ":" string))
+      ,(list 'restrict (var-sort type) [a-zA-Z0-9]))))
+
+(define pattern
+  (macro (type)
+    (list 'rule 'cf 'pattern 'Form  (list "[" type "]"))))
+
+
+(define extend-syntax
+  (macro rules
+    `(begin
+      ,@(map add-rule-l rules))))
+
+(define (add-rule-l l)
+  `(add-rule ,(first l) ,(second l) ,(third l)))
+
+(define add-rule
+  (macro (label sort elements)
+    (list 'rule 'cf label sort elements)))
+
+
+
+(define with
+  (macro (env . body)
+    (cond
+     ((nullp env)
+      body)
+     ())))
+
+(define (split env)
+  (list (vars env) (vals env)))
+
+(define (vars env) (map first env))
+(define (vals env) (map rest env))
+
+
+(define (test-env env)
+  (let-env env (print x)))
+
+(define (an-env)
+   (bind 'x 1 (bind 'y 2 '())))
+
+(define let-env
+  (macro (env . body)
+    `((lambda ,(vars env) ,@body) ,@(vals env))))
+
+(define (empty-env) ())
+
+(define (bind x y env) 
+  (cons (cons x y) env))
+
+
+(define (boundp x env)
+  (cond
+   ((nullp env) #f)
+   ((equalp (first (first env)) x) #t)
+   (else (boundp x (rest env)))))
+
+(define (binding x env)
+  (cond
+   ((nullp env) '())
+   ((equalp (first (first env)) x) (rest (first env)))
+   (else (binding x (rest env)))))
+
+(define (delete x env)
+  (cond
+   ((nullp env) env)
+   ((equalp (first (first env)) x) (rest env))
+   (else (cons (first env) (delete x (rest env))))))
+
+
+
+(define (set-bindings env)
+  (map (lambda (binding) (setd (first binding) (rest binding))) env))
+
+(define (match term pattern env) 
+  (begin
+    (print "MATCHING:" term "PATTERN:" pattern)
+  (cond
+   ((and (pairp pattern) (equalp (first pattern) 'var))
+    (if (boundp pattern env)
+	(if (equalp term (binding (second pattern) env))
+	    env
+	    #f)
+	(bind (second pattern) term env)))
+   ((and (pairp term) (pairp pattern))
+    (cond
+     ((equalp (first term) (first pattern))
+      (match-args (rest term) (rest pattern) env))
+     (else
+      #f)))
+   (else
+    (if (equalp term pattern) env #f)))))
+   
+(define (match-args terms patterns env)
+  (if (nullp terms)
+      env
+      (begin (print "TERMS:" terms "PATTERNS:" patterns)
+      (match-args (rest terms) (rest patterns) 
+		  (match (first terms) (first patterns) env)))))
+
+
+(define or              
+  (macro args 
+    (if (nullp args) 
+	#f
+	(cons 'cond (map list args)))))
+
+(define and             
+  (macro args 
+    (cond ((nullp args) #t)
+	  ((nullp (rest args)) (first args))
+	  (else (list 'if (first args) (cons 'and (rest args)) #f)))))
+
+
+(define  does-splicingp
+  (lambda (form)
+    (and (pairp form)
+	 (or (and (pairp (car form))
+		  (equalp 'unquote-splicing (first (first form))))
+	     (does-splicingp (cdr form))))))
+
+(define expand-list
+  (lambda (form)
+    (if (does-splicingp form)
+	(cons 'append
+	      (map (lambda (x)
+		     (if (and (pairp x)
+			      (equalp 'unquote-splicing
+				   (car x)))
+			 (second x)
+			 (list 'list (expand x))))
+		   form))
+	(cons 'list (map expand form)))))
+
+(define expand
+  (lambda (form)
+    (cond ((not (pairp form))
+	   (list 'quote form))
+	  ((equalp 'quasiquote (car form))
+	   (expand (second form)))
+	  ((equalp 'unquote (car form))
+	   (second form))
+	  (else (expand-list form)))))
+
+(define (expand-qq form)
+  (expand form))
+  
+(define quasiquote (macro (x) (expand-qq x)))
+
+
